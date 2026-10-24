@@ -51,7 +51,7 @@ data class ProviderConfig(
     }
 }
 
-data class AppSettings(val modeId: String = "normal", val creativity: Float = 0.35f, val defaultProviderId: String? = null)
+data class AppSettings(val modeId: String = "normal", val creativity: Float = 0.35f, val defaultProviderId: String? = null, val keyScale: Float = 1f, val haptics: Boolean = true)
 
 sealed class AiResult {
     data class Success(val text: String) : AiResult()

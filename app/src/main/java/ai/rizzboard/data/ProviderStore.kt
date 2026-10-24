@@ -50,11 +50,23 @@ class ProviderStore(context: Context) {
 
     fun settings(): AppSettings {
         val s = try { JSONObject(prefs.getString("settings", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
-        return AppSettings(s.optString("mode", "normal"), s.optDouble("creativity", .35).toFloat().coerceIn(0f, 1f), s.optString("provider", "").takeIf { it.isNotBlank() })
+        return AppSettings(
+            s.optString("mode", "normal"),
+            s.optDouble("creativity", .35).toFloat().coerceIn(0f, 1f),
+            s.optString("provider", "").takeIf { it.isNotBlank() },
+            s.optDouble("keyScale", 1.0).toFloat().coerceIn(0.85f, 1.25f),
+            s.optBoolean("haptics", true)
+        )
     }
 
     fun setSettings(value: AppSettings) {
-        prefs.edit().putString("settings", JSONObject().put("mode", value.modeId).put("creativity", value.creativity).put("provider", value.defaultProviderId ?: "").toString()).apply()
+        prefs.edit().putString("settings", JSONObject()
+            .put("mode", value.modeId)
+            .put("creativity", value.creativity)
+            .put("provider", value.defaultProviderId ?: "")
+            .put("keyScale", value.keyScale.toDouble())
+            .put("haptics", value.haptics)
+            .toString()).apply()
     }
 
     fun activeProvider(): ProviderConfig? {

@@ -2,8 +2,11 @@ package ai.rizzboard.ime
 
 import android.inputmethodservice.InputMethodService
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.ScrollView
@@ -12,6 +15,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import ai.rizzboard.AppGraph
 import ai.rizzboard.ai.AiResult
 import ai.rizzboard.ai.WritingModes
@@ -20,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** Real Android IME. All target-field edits go through InputConnection; no accessibility scraping. */
 class RizzInputMethodService : InputMethodService() {
@@ -38,13 +44,19 @@ class RizzInputMethodService : InputMethodService() {
     private var snapshot = EditSnapshot("", false)
     private var lastApplied: AppliedSnapshot? = null
     private var creative = 0.35f
+    private var keyScale = 1f
+    private var haptics = true
 
-    override fun onCreate() { super.onCreate(); val settings = AppGraph.store(this).settings(); mode = WritingModes.get(settings.modeId); creative = settings.creativity }
+    override fun onCreate() { super.onCreate(); val settings = AppGraph.store(this).settings(); mode = WritingModes.get(settings.modeId); creative = settings.creativity; keyScale = settings.keyScale; haptics = settings.haptics }
+    override fun onEvaluateFullscreenMode(): Boolean = false
     override fun onCreateInputView(): View = buildKeyboard()
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
-        creative = AppGraph.store(this).settings().creativity
-        if (!restarting) { mode = WritingModes.get(AppGraph.store(this).settings().modeId); aiVisible = false; busy = false; job?.cancel(); inputText = ""; generated = ""; status = ""; lastApplied = null }
+        val settings = AppGraph.store(this).settings()
+        creative = settings.creativity
+        keyScale = settings.keyScale
+        haptics = settings.haptics
+        if (!restarting) { mode = WritingModes.get(settings.modeId); aiVisible = false; busy = false; job?.cancel(); inputText = ""; generated = ""; status = ""; lastApplied = null }
     }
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
@@ -56,6 +68,13 @@ class RizzInputMethodService : InputMethodService() {
     private fun buildKeyboard(): View {
         val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), dp(10), dp(10), dp(12)); background = bg(0xFFF4F1FA.toInt(), 20) }
         root = layout
+        // Android 15 enforces edge-to-edge: without this the navigation bar
+        // overlaps the space key. Pad the keyboard by the real system-bar height.
+        ViewCompat.setOnApplyWindowInsetsListener(layout) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            view.setPadding(dp(10), dp(10), dp(10), dp(12) + bars.bottom)
+            insets
+        }
         render()
         return layout
     }
@@ -110,10 +129,11 @@ class RizzInputMethodService : InputMethodService() {
         val rows: List<List<String>> = if (numbers) listOf(listOf("1","2","3","4","5","6","7","8","9","0"), listOf("@","#","$","%","&","-","+","(",")","/"), listOf("=","*","\"","'",":",";","!","?","⌫"))
             else listOf("qwertyuiop".map { it.toString() }, "asdfghjkl".map { it.toString() }, listOf("⇧") + "zxcvbnm".map { it.toString() } + listOf("⌫"))
         rows.forEachIndexed { rowIndex, row ->
-            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(3), dp(4), dp(3), dp(4)) }
+            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(4), dp(4), dp(4), dp(4)) }
             row.forEachIndexed { idx, key ->
                 val special = key in listOf("⇧", "⌫")
-                val actual = if (shifted && key.length == 1 && key[0].isLetter()) key.uppercase() else key
+                // iOS-style: letters always show uppercase labels.
+                val actual = if (key.length == 1 && key[0].isLetter() && !numbers) key.uppercase() else key
                 val view = keyButton(actual, special) {
                     when (key) {
                         "⇧" -> { shifted = !shifted; render() }
@@ -121,17 +141,21 @@ class RizzInputMethodService : InputMethodService() {
                         else -> { currentInputConnection?.commitText(actual, 1); if (shifted) shifted = false }
                     }
                 }
+                if (key == "⌫") attachHoldToDelete(view)
                 val weight = if (special) 1.45f else 1f
-                line.addView(view, LinearLayout.LayoutParams(0, dp(58), weight).apply { setMargins(dp(3), 0, dp(3), 0) })
+                line.addView(view, LinearLayout.LayoutParams(0, keyDp(58), weight).apply { setMargins(dp(3), 0, dp(3), 0) })
             }
             parent.addView(line)
         }
-        val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(3), dp(5), dp(3), dp(2)) }
-        bottom.addView(keyButton(if (numbers) "ABC" else "?123", true) { numbers = !numbers; render() }, LinearLayout.LayoutParams(0, dp(60), 1.45f).apply { setMargins(dp(3),0,dp(3),0) })
-        bottom.addView(keyButton(",", false) { currentInputConnection?.commitText(",", 1) }, LinearLayout.LayoutParams(0, dp(60), .65f).apply { setMargins(dp(3),0,dp(3),0) })
-        bottom.addView(keyButton("English (US)     ␣", false) { currentInputConnection?.commitText(" ", 1) }, LinearLayout.LayoutParams(0, dp(60), 5f).apply { setMargins(dp(3),0,dp(3),0) })
-        bottom.addView(keyButton(".", false) { currentInputConnection?.commitText(".", 1) }, LinearLayout.LayoutParams(0, dp(60), .65f).apply { setMargins(dp(3),0,dp(3),0) })
-        bottom.addView(keyButton(enterLabel(), true) { enter() }, LinearLayout.LayoutParams(0, dp(60), 1.35f).apply { setMargins(dp(3),0,dp(3),0) })
+        // iOS-style bottom row: [?123] [globe] [space] [return] — comma and
+        // period sit as compact keys next to the space bar so typing stays fast.
+        val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(4), dp(6), dp(4), dp(2)) }
+        bottom.addView(keyButton(if (numbers) "ABC" else "?123", true) { numbers = !numbers; render() }, LinearLayout.LayoutParams(0, keyDp(60), 1.25f).apply { setMargins(dp(2),0,dp(2),0) })
+        bottom.addView(keyButton("🌐", false) { pickOtherKeyboard() }, LinearLayout.LayoutParams(0, keyDp(60), 0.9f).apply { setMargins(dp(2),0,dp(2),0) })
+        bottom.addView(keyButton(",", false) { currentInputConnection?.commitText(",", 1) }, LinearLayout.LayoutParams(0, keyDp(60), 0.6f).apply { setMargins(dp(2),0,dp(2),0) })
+        bottom.addView(keyButton(if (numbers) "␣" else "English (US)   ␣", false) { currentInputConnection?.commitText(" ", 1) }, LinearLayout.LayoutParams(0, keyDp(60), 4.2f).apply { setMargins(dp(2),0,dp(2),0) })
+        bottom.addView(keyButton(".", false) { currentInputConnection?.commitText(".", 1) }, LinearLayout.LayoutParams(0, keyDp(60), 0.6f).apply { setMargins(dp(2),0,dp(2),0) })
+        bottom.addView(keyButton(enterLabel(), true) { enter() }, LinearLayout.LayoutParams(0, keyDp(60), 1.45f).apply { setMargins(dp(2),0,dp(2),0) })
         parent.addView(bottom)
     }
 
@@ -234,9 +258,32 @@ class RizzInputMethodService : InputMethodService() {
         if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) ic.performEditorAction(action) else ic.commitText("\n", 1)
     }
     private fun enterLabel() = when (currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)) {
-        EditorInfo.IME_ACTION_GO -> "Go"; EditorInfo.IME_ACTION_SEARCH -> "⌕"; EditorInfo.IME_ACTION_SEND -> "➤"; EditorInfo.IME_ACTION_DONE -> "✓"; else -> "↵"
+        EditorInfo.IME_ACTION_GO -> "Go"; EditorInfo.IME_ACTION_SEARCH -> "⌕"; EditorInfo.IME_ACTION_SEND -> "➤"; EditorInfo.IME_ACTION_DONE -> "✓"; else -> "return"
     }
     private fun launchSettings() { try { val i = packageManager.getLaunchIntentForPackage(packageName); i?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i) } catch (_: Exception) {} }
+    private fun pickOtherKeyboard() {
+        try { getSystemService(InputMethodManager::class.java)?.showInputMethodPicker() } catch (_: Exception) {}
+    }
+    /** Hold the delete key: first press deletes, then auto-repeats like a normal keyboard. */
+    private fun attachHoldToDelete(view: TextView) {
+        val repeat = object : Runnable {
+            override fun run() { backspace(); view.postDelayed(this, 55) }
+        }
+        view.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (haptics) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    backspace(); v.alpha = 0.72f; v.isPressed = true; v.postDelayed(repeat, 400); true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // No performClick() here: the click listener also deletes, which
+                    // would double-delete on release. The touch handler owns this key.
+                    v.removeCallbacks(repeat); v.alpha = 1f; v.isPressed = false; true
+                }
+                else -> false
+            }
+        }
+    }
     private fun smallButton(text: String, primary: Boolean, click: (View) -> Unit) = TextView(this).apply {
         this.text = text; textSize = 14.5f; gravity = Gravity.CENTER; setTypeface(null, Typeface.BOLD)
         setTextColor(if (primary) Color.WHITE else 0xFF514B63.toInt()); background = bg(if (primary) 0xFF7054D9.toInt() else Color.WHITE, 12)
@@ -246,11 +293,18 @@ class RizzInputMethodService : InputMethodService() {
         this.text = text; textSize = if (text.length > 5) 13.5f else 21f; gravity = Gravity.CENTER
         setTextColor(if (special) 0xFF514B63.toInt() else 0xFF282438.toInt())
         background = bg(if (special) 0xFFE4DDF2.toInt() else Color.WHITE, 10)
-        elevation = dp(1).toFloat(); setOnClickListener { click() }
+        elevation = dp(1).toFloat()
+        setOnClickListener {
+            if (haptics) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            alpha = 0.72f; postDelayed({ alpha = 1f }, 90)
+            click()
+        }
     }
     private fun label(text: String, size: Int, color: Int, bold: Boolean = false) = TextView(this).apply { this.text = text; textSize = size.toFloat(); setTextColor(color); if (bold) setTypeface(null, Typeface.BOLD); setPadding(dp(5), dp(5), dp(5), dp(5)) }
     private fun bg(color: Int, radius: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    /** Key heights/widths scale with the "Key size" setting in the app (85%–125%). */
+    private fun keyDp(value: Int) = dp((value * keyScale).roundToInt())
     private data class EditSnapshot(val text: String, val wasSelection: Boolean)
     private data class AppliedSnapshot(val original: EditSnapshot, val generated: String)
 }

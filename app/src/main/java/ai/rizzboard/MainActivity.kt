@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import ai.rizzboard.ai.*
 import ai.rizzboard.data.ProviderStore
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private val Ink = Color(0xFF25213A)
 private val Violet = Color(0xFF7054D9)
@@ -82,6 +83,26 @@ class MainActivity : ComponentActivity() {
                         Text("Creativity · ${(settings.creativity * 100).toInt()}%", fontWeight = FontWeight.Medium, color = Ink)
                         Slider(value = settings.creativity, onValueChange = { settings = settings.copy(creativity = it) }, onValueChangeFinished = { store.setSettings(settings) }, valueRange = 0f..1f)
                         Text("Lower values stay closer to your original wording.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF777287))
+                    }
+                }
+                item {
+                    SectionCard("Keyboard layout", "Adjust the size and feel of the keys") {
+                        Text("Key size · ${(settings.keyScale * 100).roundToInt()}%", fontWeight = FontWeight.Medium, color = Ink)
+                        Slider(
+                            value = settings.keyScale,
+                            onValueChange = { settings = settings.copy(keyScale = it) },
+                            onValueChangeFinished = { store.setSettings(settings) },
+                            valueRange = 0.85f..1.25f,
+                            steps = 4
+                        )
+                        Text("Applies when the keyboard opens again. Hold the delete key to auto-repeat.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF777287))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Feedback on key press", fontWeight = FontWeight.Medium, color = Ink)
+                                Text("A short vibration every time a key is tapped.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF777287))
+                            }
+                            Switch(checked = settings.haptics, onCheckedChange = { settings = settings.copy(haptics = it); store.setSettings(settings) })
+                        }
                     }
                 }
                 item {
