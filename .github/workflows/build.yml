@@ -28,15 +28,15 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # Installs a self-contained Android SDK (cmdline-tools + platform-tools)
-      # so the build does not depend on anything preinstalled on the runner.
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK components
+      # On ubuntu-24.04 the Android SDK is preinstalled at /usr/local/lib/android/sdk.
+      # We deliberately do NOT use android-actions/setup-android@v3: its "sdkmanager
+      # tools" call fails (package removed upstream in cmdline-tools 16.0).
+      - name: Accept Android SDK licenses and install components
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null || true
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          export SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          yes | "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools" > /dev/null
+          "$SDKMANAGER" --list_installed | grep -E "platforms;|build-tools;" || true
 
       - name: Set up Gradle (with caching)
         uses: gradle/actions/setup-gradle@v4
