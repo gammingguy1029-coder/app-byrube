@@ -61,7 +61,18 @@ class RizzInputMethodService : InputMethodService() {
     private var enterKey: TextView? = null
     private var lettersHost: LinearLayout? = null
     private var symbolsHost: LinearLayout? = null
-    private val letterViews = ArrayList<Pair<TextView, Char>>(26)
+    /** Resolved lazily per input session (cleared in onStartInput) so repeated AI-panel
+     *  renders don't re-run Keystore decryption on the UI thread. */
+    private var cachedProvider: ProviderConfig? = null
+    private var previewLabel: TextView? = null     // "Text to rephrase · …" label, updated in place
+    private var availablePreview = ""              // last async field read for the preview label
+    private var previewPending = false
+
+    /** Cached active-provider lookup — one Keystore decrypt per input session max. */
+    private fun currentProvider(): ProviderConfig? {
+        if (cachedProvider == null) cachedProvider = AppGraph.store(this).activeProvider()
+        return cachedProvider
+    }
 
     override fun onCreate() { super.onCreate(); val settings = AppGraph.store(this).settings(); mode = WritingModes.get(settings.modeId); creative = settings.creativity; keyScale = settings.keyScale; haptics = settings.haptics }
 
@@ -87,6 +98,9 @@ class RizzInputMethodService : InputMethodService() {
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
+        // Providers can be edited in Settings between sessions — re-resolve lazily.
+        cachedProvider = null
+        availablePreview = ""; previewPending = false
         val settings = AppGraph.store(this).settings()
         creative = settings.creativity
         keyScale = settings.keyScale
@@ -115,8 +129,7 @@ class RizzInputMethodService : InputMethodService() {
     private fun render() {
         val container = root ?: return
         container.removeAllViews()
-        letterViews.clear()
-        shiftKey = null; qKey = null; spaceKey = null; enterKey = null; lettersHost = null; symbolsHost = null
+        shiftKey = null; qKey = null; spaceKey = null; enterKey = null; lettersHost = null; symbolsHost = null; previewLabel = null
 
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), 0, dp(4), dp(5)) }
         val brand = TextView(this).apply { text = "r."; setTextColor(0xFF7054D9.toInt()); setTypeface(null, Typeface.BOLD); setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f); setPadding(dp(7), 0, dp(6), 0) }
@@ -127,7 +140,7 @@ class RizzInputMethodService : InputMethodService() {
         container.addView(bar)
 
         if (aiVisible) renderAiPanel(container) else renderKeys(container)
-        updateCaseLabels()
+        updateShiftVisual()
         updateBottomLabels()
     }
 
@@ -176,22 +189,24 @@ class RizzInputMethodService : InputMethodService() {
         val r2 = "@#\$%&-+()/"
         val r3 = listOf("=", "*", "\"", "'", ":", ";", "!", "?")
         val l1 = letterRow(dp(4)); r1.forEach { addSinkKey(l1, it.toString(), 1f) }; host.addView(l1)
-        val l2 = letterRow(dp(4)); addSpacer(l2, 0.5f); r2.forEach { addSinkKey(l2, it.toString(), 1f) }; addSpacer(l2, 0.5f); host.addView(l2)
-        val l3 = letterRow(dp(2)); addSpacer(l3, 0.5f); r3.forEach { addSinkKey(l3, it, 1f) }; l3.addView(deleteKey(), rowParams(1.5f)); addSpacer(l3, 0.5f); host.addView(l3)
+        // r2 holds exactly 10 symbols — no spacers, so every key is 1/10 wide and
+        // column-aligned with the digit row above (all rows total weight 10).
+        val l2 = letterRow(dp(4)); r2.forEach { addSinkKey(l2, it.toString(), 1f) }; host.addView(l2)
+        val l3 = letterRow(dp(2)); r3.forEach { addSinkKey(l3, it, 1f) }; l3.addView(deleteKey(), rowParams(2f)); host.addView(l3)
         return host
     }
 
     /** Bottom row: [?123] [globe] [,] [space] [.] [enter] */
     private fun buildBottomRow(): LinearLayout {
         val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(4), dp(6), dp(4), dp(2)) }
-        qKey = layoutKey(if (numbers) "ABC" else "?123", true, keyDp(60)) { toggleNumbers() }
+        qKey = layoutKey(if (numbers) "ABC" else "?123", true) { toggleNumbers() }
         bottom.addView(qKey, rowParams(1.4f, 60))
-        bottom.addView(layoutKey("🌐", true, keyDp(60)) { pickOtherKeyboard() }, rowParams(0.9f, 60))
-        bottom.addView(layoutKey(",", false, keyDp(60)) { commitText(",") }, rowParams(0.65f, 60))
-        spaceKey = layoutKey(if (numbers) "␣" else "English (US)   ␣", false, keyDp(60)) { commitText(" ") }
+        bottom.addView(layoutKey("🌐", true) { pickOtherKeyboard() }, rowParams(0.9f, 60))
+        bottom.addView(layoutKey(",", false) { commitText(",") }, rowParams(0.65f, 60))
+        spaceKey = layoutKey(if (numbers) "␣" else "English (US)   ␣", false) { commitText(" ") }
         bottom.addView(spaceKey, rowParams(4.3f, 60))
-        bottom.addView(layoutKey(".", false, keyDp(60)) { commitText(".") }, rowParams(0.65f, 60))
-        enterKey = layoutKey(enterLabel(), true, keyDp(60)) { enter() }
+        bottom.addView(layoutKey(".", false) { commitText(".") }, rowParams(0.65f, 60))
+        enterKey = layoutKey(enterLabel(), true) { enter() }
         bottom.addView(enterKey, rowParams(1.5f, 60))
         return bottom
     }
@@ -203,28 +218,26 @@ class RizzInputMethodService : InputMethodService() {
 
     private fun addSpacer(row: LinearLayout, w: Float) = row.addView(View(this), rowParams(w))
 
-    private fun letterKey(c: Char): TextView {
-        val view = layoutKey(c.toString(), false, keyDp(58)) { commitLetter(c) }
-        letterViews.add(view to c)
-        return view
-    }
+    private fun letterKey(c: Char): TextView =
+        layoutKey(c.uppercaseChar().toString(), false) { commitLetter(c) }
 
-    private fun deleteKey(): TextView = layoutKey("⌫", true, keyDp(58), repeatable = true) { backspace() }
+    private fun deleteKey(): TextView = layoutKey("⌫", true, repeatable = true) { backspace() }
 
-    private fun actionKey(label: String): TextView = layoutKey(label, true, keyDp(58)) { shifted = !shifted; updateCaseLabels() }
+    private fun actionKey(label: String): TextView = layoutKey(label, true) { shifted = !shifted; updateShiftVisual() }
 
     private fun addSinkKey(row: LinearLayout, label: String, w: Float) {
-        row.addView(layoutKey(label, false, keyDp(58)) { commitText(label) }, rowParams(w))
+        row.addView(layoutKey(label, false) { commitText(label) }, rowParams(w))
     }
 
     private fun rowParams(w: Float, baseHeight: Int = 58) = LinearLayout.LayoutParams(0, keyDp(baseHeight), w).apply { setMargins(dp(2), 0, dp(2), 0) }
 
     /**
      * Single key factory. Touch feedback, haptics and (optional) hold-to-repeat
-     * are wired once here. The action runs on ACTION_UP; the typing path after
-     * that only touches InputConnection and the one or two views that change.
+     * are wired once here. Non-repeatable actions run through the view's click
+     * listener (so TalkBack can activate keys) and only fire when the finger is
+     * released inside the key — sliding off cancels the press.
      */
-    private fun layoutKey(text: String, special: Boolean, height: Int, repeatable: Boolean = false, action: () -> Unit): TextView {
+    private fun layoutKey(text: String, special: Boolean, repeatable: Boolean = false, action: () -> Unit): TextView {
         val idleColor = if (special) 0xFFE4DDF2.toInt() else Color.WHITE
         val pressedColor = if (special) 0xFFCBBBEF.toInt() else 0xFFE9E4F2.toInt()
         val view = TextView(this).apply {
@@ -234,12 +247,19 @@ class RizzInputMethodService : InputMethodService() {
             setTextColor(if (special) 0xFF514B63.toInt() else 0xFF282438.toInt())
             background = bg(idleColor, 10)
             elevation = 1.2f * resources.displayMetrics.density
+            isClickable = true
         }
+        // Click listener = the accessibility + release path. Touch events are fully
+        // consumed below, so the framework never fires a second click on its own.
+        view.setOnClickListener { action() }
         var repeat: Runnable? = null
+        var inside = false
+        fun inBounds(v: View, e: MotionEvent) = e.x >= 0f && e.x <= v.width.toFloat() && e.y >= 0f && e.y <= v.height.toFloat()
         view.setOnTouchListener { v, event ->
             val bgDrawable = v.background as? GradientDrawable
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    inside = true
                     bgDrawable?.setColor(pressedColor)
                     if (haptics) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     if (repeatable) {
@@ -250,17 +270,29 @@ class RizzInputMethodService : InputMethodService() {
                         repeat = r
                         v.postDelayed(r, 350)
                     }
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val nowInside = inBounds(v, event)
+                    if (nowInside != inside) {
+                        inside = nowInside
+                        bgDrawable?.setColor(if (inside) pressedColor else idleColor)
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    val releasedInside = inBounds(v, event)
                     bgDrawable?.setColor(idleColor)
                     repeat?.let { v.removeCallbacks(it) }; repeat = null
-                    if (!repeatable) action()
+                    inside = false
+                    if (inside && releasedInside && !repeatable) v.performClick()
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     bgDrawable?.setColor(idleColor)
                     repeat?.let { v.removeCallbacks(it) }; repeat = null
+                    inside = false
                     true
                 }
                 else -> false
@@ -271,13 +303,12 @@ class RizzInputMethodService : InputMethodService() {
 
     // ------------------------------------------------------ in-place updaters
 
-    /** Shift state visual + letter case labels, without rebuilding the keyboard. */
-    private fun updateCaseLabels() {
-        val upper = shifted
-        for ((view, c) in letterViews) view.text = (if (upper) c.uppercaseChar() else c).toString()
+    /** Shift-state highlight only — a single view. Letter labels are always
+     *  uppercase (iOS-style), so the typing path never relabels the keyboard. */
+    private fun updateShiftVisual() {
         shiftKey?.let { s ->
-            (s.background as? GradientDrawable)?.setColor(if (upper) 0xFF7054D9.toInt() else 0xFFE4DDF2.toInt())
-            s.setTextColor(if (upper) Color.WHITE else 0xFF514B63.toInt())
+            (s.background as? GradientDrawable)?.setColor(if (shifted) 0xFF7054D9.toInt() else 0xFFE4DDF2.toInt())
+            s.setTextColor(if (shifted) Color.WHITE else 0xFF514B63.toInt())
         }
     }
 
@@ -300,7 +331,7 @@ class RizzInputMethodService : InputMethodService() {
         val ic = currentInputConnection ?: return
         val ch = if (shifted) c.uppercaseChar() else c
         ic.commitText(ch.toString(), 1)
-        if (shifted) { shifted = false; updateCaseLabels() }
+        if (shifted) { shifted = false; updateShiftVisual() }
     }
 
     private fun commitText(s: String) {
@@ -336,7 +367,7 @@ class RizzInputMethodService : InputMethodService() {
     private fun renderAiPanel(parent: LinearLayout) {
         val scroll = ScrollView(this)
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(7), dp(7), dp(7), dp(4)) }
-        val provider = AppGraph.store(this).activeProvider()
+        val provider = currentProvider()
         if (provider == null) {
             col.addView(label("Add and select an AI provider in RizzBoard settings to use rephrasing. Your regular keyboard still works.", 13, 0xFF5D586B.toInt()))
             col.addView(smallButton("Open settings", true) { launchSettings() })
@@ -352,8 +383,22 @@ class RizzInputMethodService : InputMethodService() {
             col.addView(smallButton("Discard preview", false) { generated = ""; status = ""; render() })
         } else {
             col.addView(label("Rephrase text you selected, or the text immediately before the cursor.", 14, 0xFF5D586B.toInt()))
-            val available = inputText.ifBlank { readAvailableText() }
-            col.addView(label(if (available.isBlank()) "Type in the message field, then come back here. You can also select text to rephrase only that part." else "Text to rephrase · ${available.take(150)}${if (available.length > 150) "…" else ""}", 15, 0xFF343047.toInt()))
+            // The field read (binder IPC) runs after render() completes — the panel
+            // paints instantly with a cached/placeholder value, then the label updates in place.
+            if (inputText.isBlank() && !previewPending) {
+                previewPending = true
+                uiScope.launch(Dispatchers.Main) {
+                    availablePreview = readAvailableText()
+                    previewPending = false
+                    if (aiVisible && inputText.isBlank()) {
+                        previewLabel?.let { lbl ->
+                            if (lbl.isAttachedToWindow) lbl.text = previewAvailabilityText(availablePreview)
+                        }
+                    }
+                }
+            }
+            previewLabel = label(previewAvailabilityText(inputText.ifBlank { availablePreview }), 15, 0xFF343047.toInt())
+            col.addView(previewLabel)
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             actions.addView(smallButton(if (busy) "Cancel" else "✦  Rephrase", true) { if (busy) cancelRequest() else requestRewrite() }, LinearLayout.LayoutParams(0, dp(52), 1f))
             actions.addView(smallButton("Keyboard", false) { aiVisible = false; render() }, LinearLayout.LayoutParams(0, dp(52), 0.65f))
@@ -379,7 +424,7 @@ class RizzInputMethodService : InputMethodService() {
             inputText = snapshot.text
         }
         if (inputText.isBlank()) { status = "Type a message or select text first."; render(); return }
-        val provider = AppGraph.store(this).activeProvider()
+        val provider = currentProvider()
         if (provider == null) { status = "No enabled provider configured."; render(); return }
         val activeMode = mode
         val input = inputText.take(4000)
@@ -427,6 +472,10 @@ class RizzInputMethodService : InputMethodService() {
         return try { ic.getSelectedText(0)?.toString()?.takeIf { it.isNotEmpty() } ?: ic.getTextBeforeCursor(4000, 0)?.toString().orEmpty().takeLast(4000) } catch (_: Exception) { "" }
     }
 
+    private fun previewAvailabilityText(text: String): String =
+        if (text.isBlank()) "Type in the message field, then come back here. You can also select text to rephrase only that part."
+        else "Text to rephrase · ${text.take(150)}${if (text.length > 150) "…" else ""}"
+
     private fun replaceSnapshot(value: String): Boolean {
         val ic = currentInputConnection ?: return false
         return try {
@@ -449,7 +498,15 @@ class RizzInputMethodService : InputMethodService() {
     private fun showModes(anchor: View) {
         val popup = PopupMenu(this, anchor)
         WritingModes.all.forEachIndexed { index, m -> popup.menu.add(0, index, index, m.title) }
-        popup.setOnMenuItemClickListener { item -> mode = WritingModes.all[item.itemId]; creative = AppGraph.store(this).settings().creativity; render(); true }
+        popup.setOnMenuItemClickListener { item ->
+            // Dismiss before re-rendering: render() tears down the view tree the
+            // popup is anchored to, which can otherwise confuse the dismissing popup.
+            popup.dismiss()
+            mode = WritingModes.all[item.itemId]
+            creative = AppGraph.store(this).settings().creativity
+            render()
+            true
+        }
         popup.show()
     }
 
