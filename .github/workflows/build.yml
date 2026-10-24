@@ -43,6 +43,7 @@ jobs:
 
       - name: Build debug APK
         run: |
+          chmod +x gradlew
           set -o pipefail
           ./gradlew :app:assembleDebug --stacktrace --max-workers=4 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" 2>&1 | tee build.log
 
