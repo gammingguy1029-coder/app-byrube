@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.RizzBoard" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#7656D6</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F7F5FC</item>
+        <item name="android:navigationBarColor">#F7F5FC</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>
