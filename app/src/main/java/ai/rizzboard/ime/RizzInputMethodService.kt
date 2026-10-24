@@ -175,8 +175,8 @@ class RizzInputMethodService : InputMethodService() {
         val r1 = "1234567890"
         val r2 = "@#\$%&-+()/"
         val r3 = listOf("=", "*", "\"", "'", ":", ";", "!", "?")
-        val l1 = letterRow(dp(4)); r1.forEach { addSinkKey(l1, it, 1f) }; host.addView(l1)
-        val l2 = letterRow(dp(4)); addSpacer(l2, 0.5f); r2.forEach { addSinkKey(l2, it, 1f) }; addSpacer(l2, 0.5f); host.addView(l2)
+        val l1 = letterRow(dp(4)); r1.forEach { addSinkKey(l1, it.toString(), 1f) }; host.addView(l1)
+        val l2 = letterRow(dp(4)); addSpacer(l2, 0.5f); r2.forEach { addSinkKey(l2, it.toString(), 1f) }; addSpacer(l2, 0.5f); host.addView(l2)
         val l3 = letterRow(dp(2)); addSpacer(l3, 0.5f); r3.forEach { addSinkKey(l3, it, 1f) }; l3.addView(deleteKey(), rowParams(1.5f)); addSpacer(l3, 0.5f); host.addView(l3)
         return host
     }
