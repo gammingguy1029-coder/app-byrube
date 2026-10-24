@@ -20,6 +20,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import ai.rizzboard.AppGraph
 import ai.rizzboard.ai.AiResult
+import ai.rizzboard.ai.ProviderConfig
 import ai.rizzboard.ai.WritingModes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
