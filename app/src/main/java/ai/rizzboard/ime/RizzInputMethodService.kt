@@ -176,8 +176,8 @@ class RizzInputMethodService : InputMethodService() {
         val rows = listOf(
             listOf("😀", "😂", "🥹", "😊", "😍", "🤔", "😎", "😭", "😡", "🥳"),
             listOf("👍", "👏", "🙏", "💪", "✌️", "🫶", "❤️", "🔥", "💯", "🎉"),
-            listOf("🐶", "🐱", "🍕", "☕", "🍻", "⚽", "🎮", "🌙", "☀️", "🌈"),
-            listOf("🌹", "😴", "🤯", "🤣", "😜", "🥶", "⭐", "🎁", "💋")
+            listOf("🐶", "🐱", "🍕", "☕", "📈", "⚽", "🎮", "🌙", "☀️", "🌈"),
+            listOf("🌹", "🥀", "😴", "🤯", "🤣", "🥶", "⭐", "🎁", "💋")
         )
         rows.forEachIndexed { index, row ->
             val r = letterRow(dp(4))
