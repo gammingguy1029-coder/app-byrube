@@ -24,6 +24,19 @@ interface AiProvider {
 /** Adapter for endpoints implementing the OpenAI Chat Completions wire format. */
 class OpenAiCompatibleProvider : AiProvider {
     private val jsonType = "application/json; charset=utf-8".toMediaType()
+    @Volatile private var sharedClient: OkHttpClient? = null
+
+    /** One dispatcher + connection pool per process. Per-request clients gave no
+     *  connection reuse; newBuilder() layers the provider timeout on the shared pool. */
+    private fun clientFor(timeoutSeconds: Long): OkHttpClient {
+        val base = sharedClient ?: OkHttpClient.Builder().build().also { sharedClient = it }
+        return base.newBuilder()
+            .connectTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .callTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .build()
+    }
 
     override suspend fun generate(provider: ProviderConfig, mode: WritingMode, input: String, creativity: Float): AiResult {
         if (input.isBlank()) return AiResult.Failure("Enter or select some text first.")
@@ -42,7 +55,7 @@ Preserve the original intent, names, facts, and personality. Do not invent facts
         if (provider.model.isBlank()) return AiResult.Failure("Enter a model ID in provider settings.")
         if (provider.apiKey.isBlank()) return AiResult.Failure("Enter an API key in provider settings.")
         val timeout = provider.timeoutSeconds.coerceIn(5, 120).toLong()
-        val client = OkHttpClient.Builder().connectTimeout(timeout, TimeUnit.SECONDS).readTimeout(timeout, TimeUnit.SECONDS).writeTimeout(timeout, TimeUnit.SECONDS).callTimeout(timeout, TimeUnit.SECONDS).build()
+        val client = clientFor(timeout)
         val body = JSONObject().put("model", provider.model).put("messages", messages).put("temperature", creativity.coerceIn(0f, 1f).toDouble()).toString().toRequestBody(jsonType)
         val builder = Request.Builder().url(endpoint).post(body).header("Authorization", "Bearer ${provider.apiKey}").header("Content-Type", "application/json")
         provider.headers.forEach { (name, value) -> if (name.isNotBlank() && !name.equals("Authorization", true)) builder.header(name, value) }

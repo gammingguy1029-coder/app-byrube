@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
     var providers by remember(refresh) { mutableStateOf(store.providers()) }
     var editing by remember { mutableStateOf<ProviderConfig?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<ProviderConfig?>(null) }
     var banner by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -113,7 +114,7 @@ class MainActivity : ComponentActivity() {
                 }
                 if (providers.isEmpty()) item { EmptyProvider { creating = true } }
                 items(providers, key = { it.id }) { provider ->
-                    ProviderCard(provider = provider, selected = settings.defaultProviderId == provider.id, onSelect = { settings = settings.copy(defaultProviderId = provider.id); store.setSettings(settings); refresh++ }, onEdit = { editing = provider }, onDelete = { store.deleteProvider(provider.id); refresh++ }, onTest = {
+                    ProviderCard(provider = provider, selected = settings.defaultProviderId == provider.id, onSelect = { settings = settings.copy(defaultProviderId = provider.id); store.setSettings(settings); refresh++ }, onEdit = { editing = provider }, onDelete = { deleting = provider }, onTest = {
                         banner = "Testing ${provider.name}…"
                         scope.launch {
                             banner = when (val result = AppGraph.ai.test(provider)) {
@@ -135,7 +136,18 @@ class MainActivity : ComponentActivity() {
         }
     }
     if (creating || editing != null) {
-        ProviderEditor(initial = editing, onDismiss = { creating = false; editing = null }, onSave = { provider -> store.saveProvider(provider); creating = false; editing = null; refresh++ })
+        ProviderEditor(initial = editing, onDismiss = { creating = false; editing = null }, onSave = { provider ->
+            store.saveProvider(provider).also { ok -> if (ok) { creating = false; editing = null; refresh++ } }
+        })
+    }
+    deleting?.let { victim ->
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${victim.name}?") }, text = {
+            Text("The provider and its stored API key will be removed from this device. This can't be undone.")
+        }, confirmButton = {
+            TextButton(onClick = { store.deleteProvider(victim.id); refresh++; deleting = null }) { Text("Delete") }
+        }, dismissButton = {
+            TextButton(onClick = { deleting = null }) { Text("Cancel") }
+        })
     }
 }
 
@@ -167,7 +179,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun ProviderEditor(initial: ProviderConfig?, onDismiss: () -> Unit, onSave: (ProviderConfig) -> Unit) {
+@Composable private fun ProviderEditor(initial: ProviderConfig?, onDismiss: () -> Unit, onSave: (ProviderConfig) -> Boolean) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var url by remember { mutableStateOf(initial?.baseUrl ?: "https://api.openai.com/v1") }
     var model by remember { mutableStateOf(initial?.model ?: "") }
@@ -194,7 +206,9 @@ class MainActivity : ComponentActivity() {
         else if (initial == null && key.isBlank()) error = "API key is required."
         else {
             val previous = initial
-            onSave(ProviderConfig(id = previous?.id ?: java.util.UUID.randomUUID().toString(), name = name.trim(), baseUrl = url.trim(), model = model.trim(), apiKey = key.ifBlank { previous?.apiKey.orEmpty() }, headers = parsedHeaders, timeoutSeconds = timeout.toIntOrNull()?.coerceIn(5, 120) ?: 30, enabled = enabled))
+            if (!onSave(ProviderConfig(id = previous?.id ?: java.util.UUID.randomUUID().toString(), name = name.trim(), baseUrl = url.trim(), model = model.trim(), apiKey = key.ifBlank { previous?.apiKey.orEmpty() }, headers = parsedHeaders, timeoutSeconds = timeout.toIntOrNull()?.coerceIn(5, 120) ?: 30, enabled = enabled))) {
+                error = "Couldn't securely store the API key on this device. Nothing was saved — check device security settings and try again."
+            }
         }
     }) { Text("Save") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }

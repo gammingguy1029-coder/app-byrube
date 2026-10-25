@@ -31,14 +31,20 @@ class ProviderStore(context: Context) {
         }
     }
 
-    @Synchronized fun saveProvider(provider: ProviderConfig) {
-        val list = providers().filterNot { it.id == provider.id } + provider
-        val arr = JSONArray()
-        list.forEach { arr.put(it.toJson(includeSecret = false)) }
-        prefs.edit().putString("providers", arr.toString()).apply()
-        val headerJson = JSONObject().also { o -> provider.headers.forEach { (k, v) -> o.put(k, v) } }
-        val secrets = JSONObject().put("apiKey", provider.apiKey).put("headers", headerJson).toString()
-        prefs.edit().putString("secret_${provider.id}", encrypt(secrets)).apply()
+    /** Encrypt first, then persist metadata + secret in one atomic write. Returns
+     *  false (with nothing modified) if secure storage fails — e.g. a device whose
+     *  AndroidKeyStore misbehaves — instead of crashing the settings UI. */
+    @Synchronized fun saveProvider(provider: ProviderConfig): Boolean {
+        return try {
+            val list = providers().filterNot { it.id == provider.id } + provider
+            val arr = JSONArray()
+            list.forEach { arr.put(it.toJson(includeSecret = false)) }
+            val headerJson = JSONObject().also { o -> provider.headers.forEach { (k, v) -> o.put(k, v) } }
+            val secrets = JSONObject().put("apiKey", provider.apiKey).put("headers", headerJson).toString()
+            val encrypted = encrypt(secrets) // may throw on Keystore problems
+            prefs.edit().putString("providers", arr.toString()).putString("secret_${provider.id}", encrypted).apply()
+            true
+        } catch (_: Exception) { false }
     }
 
     @Synchronized fun deleteProvider(id: String) {
