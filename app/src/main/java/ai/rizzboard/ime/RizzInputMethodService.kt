@@ -181,7 +181,7 @@ class RizzInputMethodService : InputMethodService() {
         )
         rows.forEachIndexed { index, row ->
             val r = letterRow(dp(4))
-            row.forEach { addSinkKey(r, it, 1f) }
+            row.forEach { addSinkKey(r, it, 1f, big = true) }
             if (index == rows.lastIndex) r.addView(deleteKey(), rowParams(1f))
             host.addView(r)
         }
@@ -227,14 +227,17 @@ class RizzInputMethodService : InputMethodService() {
     /** Bottom row: [?123] [globe] [,] [😀] [space] [.] [enter] */
     private fun buildBottomRow(): LinearLayout {
         val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(4), dp(6), dp(4), dp(2)) }
-        qKey = layoutKey(if (numbers) "ABC" else "?123", true) { toggleNumbers() }
-        bottom.addView(qKey, rowParams(1.4f, 60))
-        bottom.addView(layoutKey("🌐", true) { pickOtherKeyboard() }, rowParams(0.9f, 60))
+        // Weights kept summing to 9.6; the emoji key squeezed the space bar down
+        // to 36% of the row — rebalanced so space gets ~41% back without
+        // resizing the label-bearing keys beyond readability.
+        qKey = layoutKey(if (numbers || emoji) "ABC" else "?123", true) { toggleNumbers() }
+        bottom.addView(qKey, rowParams(1.3f, 60))
+        bottom.addView(layoutKey("🌐", true) { pickOtherKeyboard() }, rowParams(0.75f, 60))
         bottom.addView(layoutKey(",", false) { commitText(",") }, rowParams(0.65f, 60))
         emojiKey = layoutKey(if (emoji) "⌨" else "😀", true) { toggleEmoji() }
-        bottom.addView(emojiKey, rowParams(0.9f, 60))
+        bottom.addView(emojiKey, rowParams(0.8f, 60))
         spaceKey = layoutKey(if (numbers) "␣" else "English (US)   ␣", false) { commitText(" ") }
-        bottom.addView(spaceKey, rowParams(3.4f, 60))
+        bottom.addView(spaceKey, rowParams(3.95f, 60))
         bottom.addView(layoutKey(".", false) { commitText(".") }, rowParams(0.65f, 60))
         enterKey = layoutKey(enterLabel(), true) { enter() }
         bottom.addView(enterKey, rowParams(1.5f, 60))
@@ -255,8 +258,8 @@ class RizzInputMethodService : InputMethodService() {
 
     private fun actionKey(label: String): TextView = layoutKey(label, true) { shifted = !shifted; updateShiftVisual() }
 
-    private fun addSinkKey(row: LinearLayout, label: String, w: Float) {
-        row.addView(layoutKey(label, false) { commitText(label) }, rowParams(w))
+    private fun addSinkKey(row: LinearLayout, label: String, w: Float, big: Boolean = false) {
+        row.addView(layoutKey(label, false, textSizeOverride = if (big) 26f else 0f) { commitText(label) }, rowParams(w))
     }
 
     private fun rowParams(w: Float, baseHeight: Int = 58) = LinearLayout.LayoutParams(0, keyDp(baseHeight), w).apply { setMargins(dp(2), 0, dp(2), 0) }
@@ -267,12 +270,15 @@ class RizzInputMethodService : InputMethodService() {
      * listener (so TalkBack can activate keys) and only fire when the finger is
      * released inside the key — sliding off cancels the press.
      */
-    private fun layoutKey(text: String, special: Boolean, repeatable: Boolean = false, action: () -> Unit): TextView {
+    private fun layoutKey(text: String, special: Boolean, repeatable: Boolean = false, textSizeOverride: Float = 0f, action: () -> Unit): TextView {
         val idleColor = if (special) 0xFFE4DDF2.toInt() else Color.WHITE
         val pressedColor = if (special) 0xFFCBBBEF.toInt() else 0xFFE9E4F2.toInt()
         val view = TextView(this).apply {
             this.text = text
-            textSize = when { text.length > 5 -> 13.5f; special -> 19f; else -> 22f }
+            textSize = when {
+                textSizeOverride > 0f -> textSizeOverride
+                text.length > 5 -> 13.5f; special -> 19f; else -> 22f
+            }
             gravity = Gravity.CENTER
             setTextColor(if (special) 0xFF514B63.toInt() else 0xFF282438.toInt())
             background = bg(idleColor, 10)
@@ -343,7 +349,9 @@ class RizzInputMethodService : InputMethodService() {
     }
 
     private fun updateBottomLabels() {
-        qKey?.text = if (numbers) "ABC" else "?123"
+        // On the emoji page the left key returns to letters, so label it ABC
+        // to match what tapping it actually does.
+        qKey?.text = if (numbers || emoji) "ABC" else "?123"
         emojiKey?.text = if (emoji) "⌨" else "😀"
         spaceKey?.text = if (numbers) "␣" else "English (US)   ␣"
         enterKey?.text = enterLabel()
