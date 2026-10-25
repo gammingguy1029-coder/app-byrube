@@ -12,8 +12,8 @@ android {
         applicationId = "ai.rizzboard"
         minSdk = 29
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.4.0"
+        versionCode = 8
+        versionName = "1.4.1"
     }
 
     buildFeatures { compose = true }

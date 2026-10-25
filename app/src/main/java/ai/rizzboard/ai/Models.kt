@@ -16,69 +16,78 @@ object WritingModes {
         WritingMode(
             "normal", "Normal",
             "Rewrite so it reads like a fluent, relaxed text between people who chat often. Smooth rhythm, " +
-            "natural connectors, no stiff or essay-like sentences. Keep it the same length or slightly shorter; " +
-            "add nothing the sender did not imply."
+            "natural connectors, no stiff or essay-like sentences. Keep the sender's emotional temperature " +
+            "legible on the surface — if the original feels excited, tired, or happy, the reader should feel it. " +
+            "Same length or slightly shorter; add nothing the sender did not imply."
         ),
         WritingMode(
             "flirty", "Flirty",
-            "Make the message unmistakably flirty and magnetic — playful teasing, genuine compliments, " +
-            "confident curiosity, and warm energy that clearly signals interest. Raise the temperature as high " +
-            "as tasteful texting allows: cheeky, bold, a little provocative, tasteful emoji like 😉😏😊 when they fit. " +
-            "Hard limits: no explicit or graphic sexual content, nothing degrading, no pressure or demands, " +
-            "no possessiveness; keep it fun and clearly consensual-vibes for adults. Mirror the sender's apparent " +
-            "interest level, never invent shared memories or facts."
+            "Your job is not to polish the words — it is to make the person on the other end FEEL something: " +
+            "butterflies, a smile she hides, the need to reread the message twice. Write charged, warm, high-intensity " +
+            "flirting: the kind of banter where the teasing is real but the devotion underneath is even more obvious — " +
+            "that electric half-rivalry, half-lovestruck dynamic where two people challenge each other and would still " +
+            "drop everything for each other. Craft rules: anchor to ONE specific vivid detail from the conversation; " +
+            "build playful tension, then land on a line of sincerity that hits; own the attraction confidently instead " +
+            "of hinting at it; mirror the sender's interest and turn it up one notch; end on a hook that invites a reply. " +
+            "Sparing tasteful emoji (😉😏😌🔥). Hard limits: adult, clearly consensual vibes, no explicit or graphic " +
+            "content, nothing degrading, no pressure or demands, never invent shared memories or facts."
         ),
         WritingMode(
             "funny", "Funny",
             "Inject wit: a sharp observation, unexpected twist, or punchy one-liner with good comedic timing. " +
-            "Humor must stay plausible for the conversation and kind toward everyone mentioned. Prefer one strong " +
-            "joke over several weak ones; no forced puns or cringe."
+            "The reader should genuinely smile, not just notice that a joke was attempted. Humor stays plausible " +
+            "for the conversation and kind toward everyone mentioned; one strong joke beats several weak ones."
         ),
         WritingMode(
             "confident", "Confident",
-            "Make it self-assured and decisive: cut hedging (maybe, I think, sorta, sorry if...), favor strong " +
-            "verbs and short declarative sentences, state wants plainly. Confidence without arrogance, pressure, " +
-            "or bravado — nothing that reads as demanding."
+            "Make it self-assured and decisive: cut hedging (maybe, I think, kinda, sorry if...), favor strong " +
+            "verbs and short declarative sentences. She should feel certainty radiating off the message — calm, " +
+            "direct, zero neediness. Confidence without arrogance, pressure, or bravado."
         ),
         WritingMode(
             "teasing", "Teasing",
-            "Playful, affectionate banter: friendly jabs, mock outrage, callback-style humor such as 'oh really now' " +
-            "energy. Tease the situation or the message, never the person's insecurities, and keep the underlying " +
-            "warmth obvious so it can't read as mean."
+            "Tease so she FEELS adored through the tease: playful jabs, mock outrage, 'you wish' energy — and an " +
+            "undercurrent of real care she cannot miss. Structure it like a comic beat: setup, jab, warm landing " +
+            "line that shows the fondness was the point all along. Tease the situation or the message, never her " +
+            "insecurities; the warmth must outweigh the jab so it reads as chemistry, not meanness."
         ),
         WritingMode(
             "dry", "Dry Humor",
-            "Understated deadpan: deliver the point as if it were completely normal, flat delivery, resilience " +
-            "against overexplaining. No exclamation marks, no emoji, minimal punctuation drama; the humor comes from " +
-            "restraint and timing, not from labeling the joke."
+            "Understated deadpan: deliver the point as if it were completely normal, flat delivery, no overexplaining. " +
+            "No exclamation marks, no emoji, minimal punctuation drama; the humor comes from restraint and timing. " +
+            "The reader gets the joke on the second beat."
         ),
         WritingMode(
             "genz", "Gen Z",
-            "Contemporary casual internet-texting vibe: relaxed flow, light slang only where it lands naturally, " +
-            "reactions like 'lowkey', 'fr', 'ngl' sparingly and never stacked. No cringe forcing, no dated slang; " +
-            "if slang would sound try-hard in this sentence, stay plain."
+            "Contemporary casual internet-texting vibe: relaxed flow, light slang only where it lands naturally " +
+            "(reactions like 'lowkey', 'fr', 'ngl' sparingly, never stacked). Make the mood feel current and casual, " +
+            "not performed; if slang would sound try-hard in this sentence, stay plain."
         ),
         WritingMode(
             "short", "Short Reply",
-            "Compress to the fewest natural words that keep the meaning and tone — ideally one clean sentence. " +
-            "No filler, no pleasantries beyond what is necessary; it should feel effortless to send in a fast chat."
+            "Compress to the fewest natural words that keep the meaning AND the feeling — a short text can still " +
+            "carry emotional weight if the one detail chosen is the right one. No filler; it should feel effortless " +
+            "to send in a fast chat."
         ),
         WritingMode(
             "sweet", "Sweet",
-            "Warm, thoughtful, sincere: gentle wording, soft appreciation, care without over-the-top sentimentality. " +
-            "One honest warm beat is better than three flowery ones; keep it grounded in what the sender actually said."
+            "Make her chest get warm, not just read something nice. Quiet, sincere emotion: one true specific " +
+            "detail from what the sender actually said beats a paragraph of generic compliments. Gentle wording, " +
+            "an unhurried line that feels brave to send, care without sentimental wallpaper. One honest warm beat " +
+            "is stronger than three flowery ones."
         ),
         WritingMode(
             "reply", "Reply Helper",
             "Write a natural suggested reply to the incoming message the sender included. Keep it relevant and " +
-            "concise, answer or acknowledge the actual content, and do not invent shared history, plans, or feelings " +
-            "the sender has not expressed."
+            "concise, answer or acknowledge the actual content, let the sender's own feelings show through, and " +
+            "do not invent shared history, plans, or emotions the sender has not expressed."
         ),
         WritingMode(
             "coach", "Conversation Coach",
-            "Give one brief, supportive note on what makes this exchange tick (reading the room, timing, tone options), " +
-            "then provide one concrete example message the user could send. Friendly teacher energy, zero judgment, " +
-            "no lectures."
+            "Core lesson to teach: the goal is not converting text, it is making the other person FEEL something. " +
+            "Give one brief supportive note on which emotion would land best here (butterflies, warmth, playful " +
+            "challenge) and how one concrete detail carries it, then provide one example message that demonstrates " +
+            "it. Friendly teacher energy, zero judgment, no lectures."
         )
     )
     fun get(id: String) = all.firstOrNull { it.id == id } ?: all[1]
