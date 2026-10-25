@@ -58,14 +58,14 @@ class MainActivity : ComponentActivity() {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(50.dp).background(Violet, RoundedCornerShape(17.dp)), contentAlignment = Alignment.Center) { Text("r.", color = Color.White, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineMedium) }
-                        Spacer(Modifier.width(13.dp)); Column { Text("RizzBoard AI", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink); Text("Your words, just a little sharper.", color = Color(0xFF777287)) }
+                        Spacer(Modifier.width(13.dp)); Column { Text("Rube Rizz", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Ink); Text("Your words, just a little sharper.", color = Color(0xFF777287)) }
                     }
                 }
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFECE7FF)), shape = RoundedCornerShape(24.dp)) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) { Text("KEY", color = Violet, fontWeight = FontWeight.Black, style = MaterialTheme.typography.labelLarge); Spacer(Modifier.width(10.dp)); Text("Set up your keyboard", fontWeight = FontWeight.Bold, color = Ink) }
-                            Text(if (enabled) "Keyboard enabled. Choose it from the keyboard switcher in any text field." else "Enable RizzBoard in Android Settings, then switch to it from any text field.", color = Color(0xFF615B70), style = MaterialTheme.typography.bodyMedium)
+                            Text(if (enabled) "Keyboard enabled. Choose it from the keyboard switcher in any text field." else "Enable Rube Rizz in Android Settings, then switch to it from any text field.", color = Color(0xFF615B70), style = MaterialTheme.typography.bodyMedium)
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Button(onClick = { context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) }, shape = RoundedCornerShape(14.dp)) { Text(if (enabled) "Keyboard settings" else "Enable keyboard") }
                                 OutlinedButton(onClick = { imeManager.showInputMethodPicker() }, shape = RoundedCornerShape(14.dp)) { Text("Choose keyboard") }
@@ -127,7 +127,7 @@ class MainActivity : ComponentActivity() {
                 item {
                     SectionCard("Privacy & compatibility", null) {
                         Row(verticalAlignment = Alignment.Top) { Text("SAFE", color = Violet, fontWeight = FontWeight.Black, style = MaterialTheme.typography.labelLarge); Spacer(Modifier.width(10.dp)); Text("Your text and API key are sent only to the provider endpoint you configure. The provider may log submitted content under its own policies. API keys are encrypted with Android Keystore on this device. Never paste secrets into an endpoint you do not trust.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF615B70)) }
-                        Text("Keyboard behavior depends on the target app. Some apps restrict selected-text access; when that happens, RizzBoard uses only the available text immediately before the cursor. Generated text is never sent automatically.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF615B70))
+                        Text("Keyboard behavior depends on the target app. Some apps restrict selected-text access; when that happens, Rube Rizz uses only the available text immediately before the cursor. Generated text is never sent automatically.", style = MaterialTheme.typography.bodySmall, color = Color(0xFF615B70))
                     }
                 }
                 if (banner.isNotBlank()) item { Text(banner, color = Violet, style = MaterialTheme.typography.bodyMedium) }

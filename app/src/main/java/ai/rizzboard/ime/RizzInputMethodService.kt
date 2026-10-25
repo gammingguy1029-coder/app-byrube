@@ -457,7 +457,7 @@ class RizzInputMethodService : InputMethodService() {
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(7), dp(7), dp(7), dp(4)) }
         val provider = currentProvider()
         if (provider == null) {
-            col.addView(label("Add and select an AI provider in RizzBoard settings to use rephrasing. Your regular keyboard still works.", 13, 0xFF5D586B.toInt()))
+            col.addView(label("Add and select an AI provider in Rube Rizz settings to use rephrasing. Your regular keyboard still works.", 13, 0xFF5D586B.toInt()))
             col.addView(smallButton("Open settings", true) { launchSettings() })
         } else if (generated.isNotEmpty()) {
             col.addView(label("Preview · ${mode.title}", 13, 0xFF766F83.toInt(), true))
