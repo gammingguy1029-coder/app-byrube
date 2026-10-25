@@ -321,8 +321,11 @@ class RizzInputMethodService : InputMethodService() {
                     val releasedInside = inBounds(v, event)
                     bgDrawable?.setColor(idleColor)
                     repeat?.let { v.removeCallbacks(it) }; repeat = null
+                    // Capture the press state BEFORE clearing it — this flag must
+                    // describe the press, not the reset happening below.
+                    val pressTracked = inside
                     inside = false
-                    if (inside && releasedInside && !repeatable) v.performClick()
+                    if (pressTracked && releasedInside && !repeatable) v.performClick()
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
