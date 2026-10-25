@@ -29,6 +29,8 @@ object WritingModes {
             "drop everything for each other. Craft rules: anchor to ONE specific vivid detail from the conversation; " +
             "build playful tension, then land on a line of sincerity that hits; own the attraction confidently instead " +
             "of hinting at it; mirror the sender's interest and turn it up one notch; end on a hook that invites a reply. " +
+            "Length follows the input: one short line in, one short line out (two short sentences at most) — a plain " +
+            "'hey' gets a confident one-liner opener with chemistry in it, NOT an essay. Punchy beats long, always. " +
             "Sparing tasteful emoji (😉😏😌🔥). Hard limits: adult, clearly consensual vibes, no explicit or graphic " +
             "content, nothing degrading, no pressure or demands, never invent shared memories or facts."
         ),
@@ -48,7 +50,8 @@ object WritingModes {
             "teasing", "Teasing",
             "Tease so she FEELS adored through the tease: playful jabs, mock outrage, 'you wish' energy — and an " +
             "undercurrent of real care she cannot miss. Structure it like a comic beat: setup, jab, warm landing " +
-            "line that shows the fondness was the point all along. Tease the situation or the message, never her " +
+            "line that shows the fondness was the point all along. Keep it as tight as the original — a tease lands " +
+            "harder short; never pad it out. Tease the situation or the message, never her " +
             "insecurities; the warmth must outweigh the jab so it reads as chemistry, not meanness."
         ),
         WritingMode(
