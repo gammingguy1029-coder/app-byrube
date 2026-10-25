@@ -41,6 +41,7 @@ class RizzInputMethodService : InputMethodService() {
     private var root: LinearLayout? = null
     private var mode = WritingModes.get("normal")
     private var numbers = false
+    private var emoji = false
     private var shifted = true
     private var aiVisible = false
     private var busy = false
@@ -62,6 +63,8 @@ class RizzInputMethodService : InputMethodService() {
     private var enterKey: TextView? = null
     private var lettersHost: LinearLayout? = null
     private var symbolsHost: LinearLayout? = null
+    private var emojiHost: LinearLayout? = null
+    private var emojiKey: TextView? = null        // bottom-row 😀 / ⌨ toggle
     /** Resolved lazily per input session (cleared in onStartInput) so repeated AI-panel
      *  renders don't re-run Keystore decryption on the UI thread. */
     private var cachedProvider: ProviderConfig? = null
@@ -110,6 +113,7 @@ class RizzInputMethodService : InputMethodService() {
             mode = WritingModes.get(settings.modeId)
             aiVisible = false; busy = false; job?.cancel()
             inputText = ""; generated = ""; status = ""; lastApplied = null
+            emoji = false
             // Open in the number/symbol layout when the editor asks for it
             // (phone, numeric, date/time fields). Password keeps the letter layout.
             val cls = attribute?.inputType?.and(InputType.TYPE_MASK_CLASS) ?: 0
@@ -130,7 +134,7 @@ class RizzInputMethodService : InputMethodService() {
     private fun render() {
         val container = root ?: return
         container.removeAllViews()
-        shiftKey = null; qKey = null; spaceKey = null; enterKey = null; lettersHost = null; symbolsHost = null; previewLabel = null
+        shiftKey = null; qKey = null; spaceKey = null; enterKey = null; lettersHost = null; symbolsHost = null; emojiHost = null; emojiKey = null; previewLabel = null
 
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(4), 0, dp(4), dp(5)) }
         val brand = TextView(this).apply { text = "r."; setTextColor(0xFF7054D9.toInt()); setTypeface(null, Typeface.BOLD); setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f); setPadding(dp(7), 0, dp(6), 0) }
@@ -145,20 +149,43 @@ class RizzInputMethodService : InputMethodService() {
         updateBottomLabels()
     }
 
-    /** Both row groups are built upfront and switched by visibility — layout
-     *  toggling between letters/symbols allocates nothing at keypress time. */
+    /** All three row groups are built upfront and switched by visibility — layout
+     *  toggling between letters/symbols/emoji allocates nothing at keypress time. */
     private fun renderKeys(parent: LinearLayout) {
         val rowsHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val letters = buildLetterRows()
         val symbols = buildSymbolRows()
-        symbols.visibility = if (numbers) View.VISIBLE else View.GONE
-        letters.visibility = if (numbers) View.GONE else View.VISIBLE
+        val emojiPage = buildEmojiRows()
+        symbols.visibility = if (numbers && !emoji) View.VISIBLE else View.GONE
+        letters.visibility = if (!numbers && !emoji) View.VISIBLE else View.GONE
+        emojiPage.visibility = if (emoji) View.VISIBLE else View.GONE
         rowsHost.addView(symbols)
         rowsHost.addView(letters)
+        rowsHost.addView(emojiPage)
         lettersHost = letters
         symbolsHost = symbols
+        emojiHost = emojiPage
         parent.addView(rowsHost)
         parent.addView(buildBottomRow())
+    }
+
+    /** Emoji grid — 4 rows of 10, same weight math as the symbol layout so every
+     *  key is 1/10 wide and the columns align. The last row trades one slot for ⌫. */
+    private fun buildEmojiRows(): LinearLayout {
+        val host = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val rows = listOf(
+            listOf("😀", "😂", "🥹", "😊", "😍", "🤔", "😎", "😭", "😡", "🥳"),
+            listOf("👍", "👏", "🙏", "💪", "✌️", "🫶", "❤️", "🔥", "💯", "🎉"),
+            listOf("🐶", "🐱", "🍕", "☕", "🍻", "⚽", "🎮", "🌙", "☀️", "🌈"),
+            listOf("🌹", "😴", "🤯", "🤣", "😜", "🥶", "⭐", "🎁", "💋")
+        )
+        rows.forEachIndexed { index, row ->
+            val r = letterRow(dp(4))
+            row.forEach { addSinkKey(r, it, 1f) }
+            if (index == rows.lastIndex) r.addView(deleteKey(), rowParams(1f))
+            host.addView(r)
+        }
+        return host
     }
 
     private fun buildLetterRows(): LinearLayout {
@@ -197,15 +224,17 @@ class RizzInputMethodService : InputMethodService() {
         return host
     }
 
-    /** Bottom row: [?123] [globe] [,] [space] [.] [enter] */
+    /** Bottom row: [?123] [globe] [,] [😀] [space] [.] [enter] */
     private fun buildBottomRow(): LinearLayout {
         val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(4), dp(6), dp(4), dp(2)) }
         qKey = layoutKey(if (numbers) "ABC" else "?123", true) { toggleNumbers() }
         bottom.addView(qKey, rowParams(1.4f, 60))
         bottom.addView(layoutKey("🌐", true) { pickOtherKeyboard() }, rowParams(0.9f, 60))
         bottom.addView(layoutKey(",", false) { commitText(",") }, rowParams(0.65f, 60))
+        emojiKey = layoutKey(if (emoji) "⌨" else "😀", true) { toggleEmoji() }
+        bottom.addView(emojiKey, rowParams(0.9f, 60))
         spaceKey = layoutKey(if (numbers) "␣" else "English (US)   ␣", false) { commitText(" ") }
-        bottom.addView(spaceKey, rowParams(4.3f, 60))
+        bottom.addView(spaceKey, rowParams(3.4f, 60))
         bottom.addView(layoutKey(".", false) { commitText(".") }, rowParams(0.65f, 60))
         enterKey = layoutKey(enterLabel(), true) { enter() }
         bottom.addView(enterKey, rowParams(1.5f, 60))
@@ -315,15 +344,29 @@ class RizzInputMethodService : InputMethodService() {
 
     private fun updateBottomLabels() {
         qKey?.text = if (numbers) "ABC" else "?123"
+        emojiKey?.text = if (emoji) "⌨" else "😀"
         spaceKey?.text = if (numbers) "␣" else "English (US)   ␣"
         enterKey?.text = enterLabel()
     }
 
-    private fun toggleNumbers() {
-        numbers = !numbers
-        lettersHost?.visibility = if (numbers) View.GONE else View.VISIBLE
-        symbolsHost?.visibility = if (numbers) View.VISIBLE else View.GONE
+    /** In-place layout swap between letters / symbols / emoji — no rebuild. */
+    private fun applyLayoutVisibility() {
+        emojiHost?.visibility = if (emoji) View.VISIBLE else View.GONE
+        lettersHost?.visibility = if (!emoji && !numbers) View.VISIBLE else View.GONE
+        symbolsHost?.visibility = if (!emoji && numbers) View.VISIBLE else View.GONE
         updateBottomLabels()
+    }
+
+    private fun toggleNumbers() {
+        // From the emoji page, ABC returns straight to letters.
+        if (emoji) { emoji = false; numbers = false } else numbers = !numbers
+        applyLayoutVisibility()
+    }
+
+    private fun toggleEmoji() {
+        numbers = false
+        emoji = !emoji
+        applyLayoutVisibility()
     }
 
     // -------------------------------------------------------------- typing path
@@ -339,14 +382,50 @@ class RizzInputMethodService : InputMethodService() {
         currentInputConnection?.commitText(s, 1)
     }
 
+    /** Deletes one full text cluster backwards so emojis with variation selectors
+     *  (❤️), skin-tone modifiers (👍🏽), ZWJ sequences (👨‍👩‍👦) and flags (🇺🇸)
+     *  disappear in a single tap instead of leaving invisible leftovers. */
     private fun backspace() {
         val ic = currentInputConnection ?: return
         val selected = try { ic.getSelectedText(0) } catch (_: Exception) { null }
-        if (!selected.isNullOrEmpty()) ic.commitText("", 1) else {
-            val before = try { ic.getTextBeforeCursor(2, 0)?.toString().orEmpty() } catch (_: Exception) { "" }
-            val chars = if (before.length >= 2 && Character.isSurrogatePair(before[before.length - 2], before[before.length - 1])) 2 else 1
-            ic.deleteSurroundingText(chars, 0)
+        if (!selected.isNullOrEmpty()) { ic.commitText("", 1); return }
+        val before = try { ic.getTextBeforeCursor(8, 0)?.toString().orEmpty() } catch (_: Exception) { "" }
+        if (before.isEmpty()) { ic.deleteSurroundingText(1, 0); return }
+
+        var i = before.length
+        var del = 0
+
+        // 1) Trailing variation selectors / keycap marks / skin-tone modifiers
+        //    belong to the base code point on their left — take them with it.
+        while (i > 0) {
+            val s = if (i >= 2 && Character.isSurrogatePair(before[i - 2], before[i - 1])) i - 2 else i - 1
+            val cp = before.codePointAt(s)
+            if (cp in 0xFE00..0xFE0F || cp == 0x20E3 || cp in 0x1F3FB..0x1F3FF) { del += i - s; i = s } else break
         }
+
+        // 2) The base code point itself.
+        var base = -1
+        if (i > 0) {
+            val s = if (i >= 2 && Character.isSurrogatePair(before[i - 2], before[i - 1])) i - 2 else i - 1
+            base = before.codePointAt(s)
+            del += i - s; i = s
+        }
+
+        // 3) ZWJ chains (👨‍👩‍👦) and flag pairs (🇺🇸) keep the cluster going leftward.
+        while (i > 0) {
+            val s = if (i >= 2 && Character.isSurrogatePair(before[i - 2], before[i - 1])) i - 2 else i - 1
+            val cp = before.codePointAt(s)
+            val continues = cp == 0x200D || (base in 0x1F1E6..0x1F1FF && cp in 0x1F1E6..0x1F1FF)
+            if (!continues) break
+            del += i - s; i = s
+            if (cp == 0x200D && i > 0) {  // the ZWJ needs the base emoji on its left too
+                val s2 = if (i >= 2 && Character.isSurrogatePair(before[i - 2], before[i - 1])) i - 2 else i - 1
+                base = before.codePointAt(s2)
+                del += i - s2; i = s2
+            } else break
+        }
+
+        ic.deleteSurroundingText(del.coerceAtLeast(1), 0)
     }
 
     private fun enter() {
