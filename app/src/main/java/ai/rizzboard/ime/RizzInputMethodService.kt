@@ -54,6 +54,9 @@ class RizzInputMethodService : InputMethodService() {
     private var creative = 0.35f
     private var keyScale = 1f
     private var haptics = true
+    // Marker of the view tree currently built inside `root`. When it matches the
+    // live config the tree can be reused without a full render() (see onStartInputView).
+    private var builtFingerprint: String? = null
 
     // Cached key views — assigned when render() builds the keyboard, used for
     // in-place updates that avoid a full rebuild on shift / layout toggles.
@@ -122,8 +125,25 @@ class RizzInputMethodService : InputMethodService() {
         }
     }
 
+    // Everything that could make a freshly built view tree differ from the
+    // existing one. Anything NOT in this list (shifted, emoji, numbers, panel
+    // text state) is handled in place by visibility /
+    // updateShiftVisual/updateBottomLabels.
+    private fun layoutFingerprint() = "${mode.id}|$keyScale|$haptics|$aiVisible"
+
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        val container = root
+        if (container != null && !aiVisible && builtFingerprint == layoutFingerprint()) {
+            // Same mode, same settings, UI already built: skip the full
+            // rebuild (removing + re-adding ~40 views is the visible lag
+            // when focus hops between fields). onStartInput has already
+            // reset shifted/emoji/numbers state — just re-sync the visuals.
+            applyLayoutVisibility()
+            updateShiftVisual()
+            updateBottomLabels()
+            return
+        }
         render()
     }
 
@@ -147,6 +167,7 @@ class RizzInputMethodService : InputMethodService() {
         if (aiVisible) renderAiPanel(container) else renderKeys(container)
         updateShiftVisual()
         updateBottomLabels()
+        builtFingerprint = layoutFingerprint()
     }
 
     /** All three row groups are built upfront and switched by visibility — layout
@@ -282,7 +303,8 @@ class RizzInputMethodService : InputMethodService() {
             gravity = Gravity.CENTER
             setTextColor(if (special) 0xFF514B63.toInt() else 0xFF282438.toInt())
             background = bg(idleColor, 10)
-            elevation = 1.2f * resources.displayMetrics.density
+            // No elevation: per-key shadows force ~40 extra compositing layers per frame
+            // (the jank Gboard-style keyboards avoid — they use flat keys).
             isClickable = true
         }
         // Click listener = the accessibility + release path. Touch events are fully
