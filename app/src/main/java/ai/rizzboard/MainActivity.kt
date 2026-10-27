@@ -168,10 +168,14 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable private fun ProviderCard(provider: ProviderConfig, selected: Boolean, onSelect: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, onTest: () -> Unit) {
-    SectionCard(provider.name + if (selected) " · Default" else "", provider.model.ifBlank { "Model not set" }) {
+    val status = listOfNotNull(
+        if (!provider.enabled) "Disabled" else null,
+        if (selected && provider.enabled) "Default" else null
+    ).joinToString(" · ")
+    SectionCard(provider.name + if (status.isNotEmpty()) " · $status" else "", provider.model.ifBlank { "Model not set" }) {
         Text(provider.baseUrl, style = MaterialTheme.typography.bodySmall, color = Color(0xFF777287))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!selected) TextButton(onClick = onSelect) { Text("Set default") }
+            if (provider.enabled && !selected) TextButton(onClick = onSelect) { Text("Set default") }
             TextButton(onClick = onTest) { Text("Test") }
             TextButton(onClick = onEdit) { Text("Edit") }
             TextButton(onClick = onDelete, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFB42343))) { Text("Delete") }

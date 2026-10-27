@@ -422,7 +422,7 @@ class RizzInputMethodService : InputMethodService() {
         val ic = currentInputConnection ?: return
         val selected = try { ic.getSelectedText(0) } catch (_: Exception) { null }
         if (!selected.isNullOrEmpty()) { ic.commitText("", 1); return }
-        val before = try { ic.getTextBeforeCursor(8, 0)?.toString().orEmpty() } catch (_: Exception) { "" }
+        val before = try { ic.getTextBeforeCursor(32, 0)?.toString().orEmpty() } catch (_: Exception) { "" }
         if (before.isEmpty()) { ic.deleteSurroundingText(1, 0); return }
 
         var i = before.length
